@@ -10,6 +10,7 @@ pub mod rbtree_amd;
 pub mod topology_utils;
 pub mod version;
 
+pub mod fmm;
 pub mod queues;
 pub mod test_kfd_utils;
 pub mod topology;

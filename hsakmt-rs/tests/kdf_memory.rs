@@ -19,26 +19,26 @@ fn test_base_component() {
         "kfd_base.hsakmt.topology.gpu_mem.len = {:?}",
         kfd_base.hsakmt.fmm.gpu_mem.len()
     );
-    // println!(
-    //     "kfd_base.hsakmt.queue.doorbells.len = {:?}",
-    //     kfd_base.hsakmt.queue.doorbells.len()
-    // );
+    println!(
+        "kfd_base.hsakmt.queue.doorbells.len = {:?}",
+        kfd_base.hsakmt.queue.doorbells.len()
+    );
 
     for aperture in kfd_base.hsakmt.fmm.svm.apertures.iter() {
-        println!();
+        println!("---");
 
         unsafe {
+            println!("aperture.tree");
             print_tree(&aperture.tree);
+            println!();
+
+            println!("aperture.user_tree");
+            print_tree(&aperture.user_tree);
+            println!();
         }
 
-        println!();
+        println!("---");
     }
-
-    // unsafe {
-    //     let aper =  &(*kfd_base.hsakmt.fmm.svm.apertures[0].tree[0]);
-    //
-    //     println!("aperture.tree (0) = {:?}", aper.node);
-    // }
 
     // println!("assert test");
 }

@@ -123,16 +123,16 @@ pub fn find_hsa_gfxip_device(device_id: u16, gfxv_major: u8) -> Option<hsa_gfxip
         return None;
     }
 
-    let gfxip_lookup_table = get_hsa_gfxip_table();
+    // let gfxip_lookup_table = get_hsa_gfxip_table();
 
     // let table_size = (std::mem::size_of_val(&gfxip_lookup_table)
     //     / std::mem::size_of::<hsa_gfxip_table>()) as u32;
 
-    for dev in gfxip_lookup_table {
-        if dev.device_id == device_id {
-            return Some(dev);
-        }
-    }
+    // for dev in gfxip_lookup_table {
+    //     if dev.device_id == device_id {
+    //         return Some(dev);
+    //     }
+    // }
 
     None
 }
@@ -1122,7 +1122,7 @@ impl HsakmtGlobals {
             props.DeviceId = v as u16;
         }
 
-        if let Some(v) = node.properties.device_id {
+        if let Some(v) = node.properties.location_id {
             props.LocationId = v as u32;
         }
 
@@ -1200,68 +1200,69 @@ impl HsakmtGlobals {
         }
 
         let gfxv_major = HSA_GET_GFX_VERSION_MAJOR(gfxv);
-        let gfxv_minor = HSA_GET_GFX_VERSION_MINOR(gfxv as u16);
-        let gfxv_stepping = HSA_GET_GFX_VERSION_STEP(gfxv as u16);
+        // let gfxv_minor = HSA_GET_GFX_VERSION_MINOR(gfxv as u16);
+        // let gfxv_stepping = HSA_GET_GFX_VERSION_STEP(gfxv as u16);
 
-        let hsa_gfxip = find_hsa_gfxip_device(props.DeviceId, gfxv_major as u8);
+        let _hsa_gfxip = find_hsa_gfxip_device(props.DeviceId, gfxv_major as u8);
+        // println!("hsa_gfxip: {:?}", hsa_gfxip);
 
-        if hsa_gfxip.is_some() || gfxv > 0 {
-            // snprintf(per_node_override, sizeof(per_node_override), "HSA_OVERRIDE_GFX_VERSION_%d", node_id);
-            // if ((envvar = getenv(per_node_override)) || (envvar = getenv("HSA_OVERRIDE_GFX_VERSION"))) {
-            //     /* HSA_OVERRIDE_GFX_VERSION=major.minor.stepping */
-            //     if ((sscanf(envvar, "%u.%u.%u%c",
-            //                 &major, &minor, &step, &dummy) != 3) ||
-            //         (major > 63 || minor > 255 || step > 255)) {
-            //         pr_err("HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
-            //                envvar);
-            //         ret = HSAKMT_STATUS_ERROR;
-            //         goto out;
-            //     }
-            //     props->OverrideEngineId.ui32.Major = major & 0x3f;
-            //     props->OverrideEngineId.ui32.Minor = minor & 0xff;
-            //     props->OverrideEngineId.ui32.Stepping = step & 0xff;
-            // }
-
-            if hsa_gfxip.is_some() {
-                let hsa_gfxip_table = hsa_gfxip.unwrap();
-
-                props.EngineId.ui32.Major = (hsa_gfxip_table.major & 0x3f) as u32;
-                props.EngineId.ui32.Minor = (hsa_gfxip_table.minor & 0xff) as u32;
-                props.EngineId.ui32.Stepping = (hsa_gfxip_table.stepping & 0xff) as u32;
-            } else {
-                props.EngineId.ui32.Major = (gfxv_major & 0x3f) as u32;
-                props.EngineId.ui32.Minor = (gfxv_minor & 0xff) as u32;
-                props.EngineId.ui32.Stepping = (gfxv_stepping & 0xff) as u32;
-            }
-
-            /* Set the CAL name of the node. If DID-based hsa_gfxip lookup was
-             * successful, use that name. Otherwise, set to GFX<GFX_VERSION>.
-             */
-            // if (hsa_gfxip && hsa_gfxip->amd_name)
-            // strncpy((char *)props->AMDName, hsa_gfxip->amd_name,
-            //         sizeof(props->AMDName)-1);
-            // else
-            // snprintf((char *)props->AMDName, sizeof(props->AMDName)-1, "GFX%06x",
-            //          HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
-
-            /* Is dGPU Node, not APU
-             * Retrieve the marketing name of the node.
-             */
-            if topology_get_node_props_from_drm(props) != 0 {
-                println!(
-                    "failed to get marketing name for device ID {}",
-                    props.DeviceId
-                );
-            }
-
-            /* Get VGPR/SGPR size in byte per CU */
-            props.SGPRSizePerCU = SGPR_SIZE_PER_CU as u32;
-            props.VGPRSizePerCU =
-                hsakmt_get_vgpr_size_per_cu(HSA_GET_GFX_VERSION_FULL(&props.EngineId.ui32));
-        } else if props.DeviceId == 0 {
-            /* still return success */
-            println!("device ID {} is not supported in libhsakmt", props.DeviceId);
-        }
+        // if hsa_gfxip.is_some() || gfxv > 0 {
+        //     // snprintf(per_node_override, sizeof(per_node_override), "HSA_OVERRIDE_GFX_VERSION_%d", node_id);
+        //     // if ((envvar = getenv(per_node_override)) || (envvar = getenv("HSA_OVERRIDE_GFX_VERSION"))) {
+        //     //     /* HSA_OVERRIDE_GFX_VERSION=major.minor.stepping */
+        //     //     if ((sscanf(envvar, "%u.%u.%u%c",
+        //     //                 &major, &minor, &step, &dummy) != 3) ||
+        //     //         (major > 63 || minor > 255 || step > 255)) {
+        //     //         pr_err("HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
+        //     //                envvar);
+        //     //         ret = HSAKMT_STATUS_ERROR;
+        //     //         goto out;
+        //     //     }
+        //     //     props->OverrideEngineId.ui32.Major = major & 0x3f;
+        //     //     props->OverrideEngineId.ui32.Minor = minor & 0xff;
+        //     //     props->OverrideEngineId.ui32.Stepping = step & 0xff;
+        //     // }
+        //
+        //     if hsa_gfxip.is_some() {
+        //         let hsa_gfxip_table = hsa_gfxip.unwrap();
+        //
+        //         props.EngineId.ui32.Major = (hsa_gfxip_table.major & 0x3f) as u32;
+        //         props.EngineId.ui32.Minor = (hsa_gfxip_table.minor & 0xff) as u32;
+        //         props.EngineId.ui32.Stepping = (hsa_gfxip_table.stepping & 0xff) as u32;
+        //     } else {
+        //         props.EngineId.ui32.Major = (gfxv_major & 0x3f) as u32;
+        //         props.EngineId.ui32.Minor = (gfxv_minor & 0xff) as u32;
+        //         props.EngineId.ui32.Stepping = (gfxv_stepping & 0xff) as u32;
+        //     }
+        //
+        //     /* Set the CAL name of the node. If DID-based hsa_gfxip lookup was
+        //      * successful, use that name. Otherwise, set to GFX<GFX_VERSION>.
+        //      */
+        //     // if (hsa_gfxip && hsa_gfxip->amd_name)
+        //     // strncpy((char *)props->AMDName, hsa_gfxip->amd_name,
+        //     //         sizeof(props->AMDName)-1);
+        //     // else
+        //     // snprintf((char *)props->AMDName, sizeof(props->AMDName)-1, "GFX%06x",
+        //     //          HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
+        //
+        //     /* Is dGPU Node, not APU
+        //      * Retrieve the marketing name of the node.
+        //      */
+        //     if topology_get_node_props_from_drm(props) != 0 {
+        //         println!(
+        //             "failed to get marketing name for device ID {}",
+        //             props.DeviceId
+        //         );
+        //     }
+        //
+        //     /* Get VGPR/SGPR size in byte per CU */
+        //     props.SGPRSizePerCU = SGPR_SIZE_PER_CU as u32;
+        //     props.VGPRSizePerCU =
+        //         hsakmt_get_vgpr_size_per_cu(HSA_GET_GFX_VERSION_FULL(&props.EngineId.ui32));
+        // } else if props.DeviceId == 0 {
+        //     /* still return success */
+        //     println!("device ID {} is not supported in libhsakmt", props.DeviceId);
+        // }
 
         // if (props->NumFComputeCores)
         // assert(props->EngineId.ui32.Major && "HSA_OVERRIDE_GFX_VERSION may be needed");
@@ -1519,44 +1520,44 @@ impl HsakmtGlobals {
                 // }
 
                 if temp_props[i].node.NumMemoryBanks != 0 {
-                    for mem_id in 0..temp_props[i].node.NumMemoryBanks {
-                        let mut hsa_mem_props = HsaMemoryProperties::default();
-
-                        let ret =
-                            self.topology_sysfs_get_mem_props(i as u32, mem_id, &mut hsa_mem_props);
-
-                        if ret != HSAKMT_STATUS_SUCCESS {
-                            return ret;
-                        }
-
-                        temp_props[i].mem.push(hsa_mem_props);
-                    }
+                    // for mem_id in 0..temp_props[i].node.NumMemoryBanks {
+                    //     let mut hsa_mem_props = HsaMemoryProperties::default();
+                    //
+                    //     let ret =
+                    //         self.topology_sysfs_get_mem_props(i as u32, mem_id, &mut hsa_mem_props);
+                    //
+                    //     if ret != HSAKMT_STATUS_SUCCESS {
+                    //         return ret;
+                    //     }
+                    //
+                    //     temp_props[i].mem.push(hsa_mem_props);
+                    // }
                 }
 
-                if temp_props[i].node.NumCaches > 0 {
-                    for cache_id in 0..temp_props[i].node.NumCaches {
-                        let mut hsa_cache_props = HsaCacheProperties::default();
-
-                        let ret = self.topology_sysfs_get_cache_props(
-                            i as u32,
-                            cache_id,
-                            &mut hsa_cache_props,
-                        );
-
-                        if ret != HSAKMT_STATUS_SUCCESS {
-                            return ret;
-                        }
-
-                        temp_props[i].cache.push(hsa_cache_props);
-                    }
-                } else if temp_props[i].node.KFDGpuID == 0 {
-                    /* a CPU node */
-                    let ret = topology_get_cpu_cache_props(i as i32, &cpu_info, &mut temp_props[i]);
-
-                    if ret != HSAKMT_STATUS_SUCCESS {
-                        return ret;
-                    }
-                }
+                // if temp_props[i].node.NumCaches > 0 {
+                //     for cache_id in 0..temp_props[i].node.NumCaches {
+                //         let mut hsa_cache_props = HsaCacheProperties::default();
+                //
+                //         let ret = self.topology_sysfs_get_cache_props(
+                //             i as u32,
+                //             cache_id,
+                //             &mut hsa_cache_props,
+                //         );
+                //
+                //         if ret != HSAKMT_STATUS_SUCCESS {
+                //             return ret;
+                //         }
+                //
+                //         temp_props[i].cache.push(hsa_cache_props);
+                //     }
+                // } else if temp_props[i].node.KFDGpuID == 0 {
+                //     /* a CPU node */
+                //     let ret = topology_get_cpu_cache_props(i as i32, &cpu_info, &mut temp_props[i]);
+                //
+                //     if ret != HSAKMT_STATUS_SUCCESS {
+                //         return ret;
+                //     }
+                // }
 
                 let num_ioLinks = temp_props[i].node.NumIOLinks - num_p2pLinks;
                 let mut link_id = 0;
@@ -1592,34 +1593,34 @@ impl HsakmtGlobals {
                     temp_props[i].node.NumIOLinks = link_id;
                 }
 
-                if num_p2pLinks > 0 {
-                    let mut sys_link_id = 0;
-
-                    /* Parse all the sysfs specified p2p links.
-                     */
-                    while sys_link_id < num_p2pLinks && link_id < sys_props.NumNodes - 1 {
-                        let mut temp_link = HsaIoLinkProperties::default();
-
-                        let ret = self.topology_sysfs_get_iolink_props(
-                            i as u32,
-                            sys_link_id,
-                            &mut temp_link,
-                            true,
-                        );
-                        if ret == HSAKMT_STATUS_NOT_SUPPORTED {
-                            continue;
-                        } else if ret != HSAKMT_STATUS_SUCCESS {
-                            return ret;
-                        }
-
-                        link_id += 1;
-                        sys_link_id += 1;
-
-                        temp_props[i].link.push(temp_link);
-                    }
-
-                    temp_props[i].node.NumIOLinks = link_id;
-                }
+                // if num_p2pLinks > 0 {
+                //     let mut sys_link_id = 0;
+                //
+                //     /* Parse all the sysfs specified p2p links.
+                //      */
+                //     while sys_link_id < num_p2pLinks && link_id < sys_props.NumNodes - 1 {
+                //         let mut temp_link = HsaIoLinkProperties::default();
+                //
+                //         let ret = self.topology_sysfs_get_iolink_props(
+                //             i as u32,
+                //             sys_link_id,
+                //             &mut temp_link,
+                //             true,
+                //         );
+                //         if ret == HSAKMT_STATUS_NOT_SUPPORTED {
+                //             continue;
+                //         } else if ret != HSAKMT_STATUS_SUCCESS {
+                //             return ret;
+                //         }
+                //
+                //         link_id += 1;
+                //         sys_link_id += 1;
+                //
+                //         temp_props[i].link.push(temp_link);
+                //     }
+                //
+                //     temp_props[i].node.NumIOLinks = link_id;
+                // }
             }
         }
 
@@ -1676,11 +1677,11 @@ impl HsakmtGlobals {
         //     return err;
         // }
 
-        let err = self.hsakmt_init_process_doorbells(self.topology.g_system.NumNodes);
-        if err != HSAKMT_STATUS_SUCCESS {
-            println!("hsakmt_fmm_init_process_apertures error");
-            return err;
-        }
+        // let err = self.hsakmt_init_process_doorbells(self.topology.g_system.NumNodes);
+        // if err != HSAKMT_STATUS_SUCCESS {
+        //     println!("hsakmt_fmm_init_process_apertures error");
+        //     return err;
+        // }
 
         *system_properties = self.topology.g_system;
 

@@ -29,10 +29,10 @@ impl KFDBaseComponentTest {
         // that the KFD acknowledges relevant node parameters
         // for the rest of the tests and used for more specific topology tests,
         // call to GetSystemProperties for a system snapshot of the topology here
-        // let ret = self
-        //     .hsakmt
-        //     .hsaKmtAcquireSystemProperties(&mut self.m_SystemProperties);
-        // assert_eq!(ret, HSAKMT_STATUS_SUCCESS);
+        let ret = self
+            .hsakmt
+            .hsaKmtAcquireSystemProperties(&mut self.m_SystemProperties);
+        assert_eq!(ret, HSAKMT_STATUS_SUCCESS);
 
         // setting memory flags with default values , can be modified according to needs
         self.m_MemoryFlags.st.ui32.NonPaged = 0; // Paged

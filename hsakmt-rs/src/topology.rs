@@ -4,19 +4,7 @@
 use crate::debug::debug_topology_println;
 use crate::fmm_types::{DRM_FIRST_RENDER_NODE, DRM_LAST_RENDER_NODE};
 use crate::globals::HsakmtGlobals;
-use crate::hsakmttypes::HsakmtStatus::{
-    HSAKMT_STATUS_ERROR, HSAKMT_STATUS_INVALID_NODE_UNIT, HSAKMT_STATUS_INVALID_PARAMETER,
-    HSAKMT_STATUS_NOT_SUPPORTED, HSAKMT_STATUS_NO_MEMORY, HSAKMT_STATUS_SUCCESS,
-};
-use crate::hsakmttypes::HSA_HEAPTYPE::HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC;
-use crate::hsakmttypes::HSA_IOLINKTYPE::{
-    HSA_IOLINKTYPE_PCIEXPRESS, HSA_IOLINKTYPE_UNDEFINED, HSA_IOLINK_TYPE_QPI_1_1,
-};
-use crate::hsakmttypes::{
-    get_hsa_gfxip_table, hsa_gfxip_table, node_props_t, HsaCacheProperties, HsaIoLinkProperties,
-    HsaMemoryProperties, HsaNodeProperties, HsaSystemProperties, HsakmtStatus, HSA_CPU_SIBLINGS,
-    HSA_GET_GFX_VERSION_FULL, HSA_IOLINKTYPE, SGPR_SIZE_PER_CU,
-};
+use crate::hsakmttypes::{HsaCacheProperties, HsaCacheType, HsaIoLinkProperties, HsaMemoryProperties, HsaNodeProperties, HsaSystemProperties, _HsaMemoryProperties__bindgen_ty_1, HSA_CPU_SIBLINGS, HSA_IOLINKTYPE, HSA_LINKPROPERTY, HSA_MEMORYPROPERTY, _HSAKMT_STATUS, _HSAKMT_STATUS_HSAKMT_STATUS_ERROR, _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_NODE_UNIT, _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_PARAMETER, _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED, _HSAKMT_STATUS_HSAKMT_STATUS_NO_MEMORY, _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS, _HSA_HEAPTYPE_HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC, _HSA_IOLINKTYPE_HSA_IOLINKTYPE_PCIEXPRESS, _HSA_IOLINKTYPE_HSA_IOLINKTYPE_UNDEFINED, _HSA_IOLINKTYPE_HSA_IOLINK_TYPE_QPI_1_1};
 use crate::queues::hsakmt_get_vgpr_size_per_cu;
 use crate::topology_utils::{num_subdirs, KFD_SYSFS_PATH_GENERATION_ID, KFD_SYSFS_PATH_NODES};
 use amdgpu_drm_sys::bindings::{
@@ -31,6 +19,7 @@ use std::fs;
 use std::mem::MaybeUninit;
 use std::thread::available_parallelism;
 use xf86drm_sys::bindings::{drmClose, drmOpenRender};
+use crate::topology_types::node_props_t;
 /* information from /proc/cpuinfo */
 #[derive(Debug, Clone)]
 pub struct proc_cpuinfo {
@@ -42,7 +31,6 @@ pub struct proc_cpuinfo {
 /* CPU cache table for all CPUs on the system. Each entry has the relative CPU
  * info and caches connected to that CPU.
  */
-#[derive(Debug)]
 pub struct cpu_cacheinfo_t {
     pub len: u32,                        /* length of the table = number of online procs */
     proc_num: i32,                       /* this cpu's processor number */
@@ -98,11 +86,11 @@ pub unsafe fn topology_parse_cpuinfo() -> (Vec<proc_cpuinfo>, usize) {
     (cpu_info, num_procs)
 }
 
-pub unsafe fn topology_sysfs_get_generation(gen_start: &mut u32) -> HsakmtStatus {
+pub unsafe fn topology_sysfs_get_generation(gen_start: &mut u32) -> _HSAKMT_STATUS {
     let content = fs::read_to_string(KFD_SYSFS_PATH_GENERATION_ID).unwrap();
     *gen_start = content.trim().parse::<u32>().unwrap();
 
-    HSAKMT_STATUS_SUCCESS
+    _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
 }
 
 pub fn HSA_GET_GFX_VERSION_MAJOR(gfxv: u32) -> u32 {
@@ -118,7 +106,7 @@ pub fn HSA_GET_GFX_VERSION_STEP(gfxv: u16) -> u32 {
 }
 
 #[allow(clippy::manual_find)]
-pub fn find_hsa_gfxip_device(device_id: u16, gfxv_major: u8) -> Option<hsa_gfxip_table> {
+pub fn find_hsa_gfxip_device(device_id: u16, gfxv_major: u8) -> Option<Vec<usize>> {
     if gfxv_major > 10 {
         return None;
     }
@@ -322,7 +310,19 @@ pub unsafe fn get_cpu_cache_info(
     let num_idx = cpu_ci.num_caches;
 
     for idx in 0..num_idx {
-        let mut this_cache = HsaCacheProperties::default();
+        let mut this_cache = HsaCacheProperties {
+            ProcessorIdLow: 0,
+            CacheLevel: 0,
+            CacheSize: 0,
+            CacheLineSize: 0,
+            CacheLinesPerTag: 0,
+            CacheAssociativity: 0,
+            CacheLatency: 0,
+            CacheType: HsaCacheType {
+                Value: 0
+            },
+            SiblingMap: [0; 256usize],
+        };
 
         /* If this cache is shared by multiple CPUs, we only need
          * to list it in the first CPU.
@@ -372,19 +372,19 @@ pub unsafe fn get_cpu_cache_info(
         let content = fs::read_to_string(cache_type_path).unwrap();
 
         if content.trim() == "Data" {
-            this_cache.CacheType.ui32.Data = 1;
+            this_cache.CacheType.ui32.set_Data(1);
         }
 
         if content.trim() == "Instruction" {
-            this_cache.CacheType.ui32.Instruction = 1;
+            this_cache.CacheType.ui32.set_Instruction(1);
         }
 
         if content.trim() == "Unified" {
-            this_cache.CacheType.ui32.Data = 1;
-            this_cache.CacheType.ui32.Instruction = 1;
+            this_cache.CacheType.ui32.set_Data(1);
+            this_cache.CacheType.ui32.set_Instruction(1);
         }
 
-        this_cache.CacheType.ui32.CPU = 1;
+        this_cache.CacheType.ui32.set_CPU(1);
 
         /* CacheSize */
         let path = format!("{}/index{}/size", prefix, idx);
@@ -522,7 +522,7 @@ pub unsafe fn topology_get_cpu_cache_props(
     node: i32,
     cpuinfo: &[proc_cpuinfo],
     tbl: &mut node_props_t,
-) -> HsakmtStatus {
+) -> _HSAKMT_STATUS {
     let (num_caches, cpu_ci_list) = topology_create_temp_cpu_cache_list(node, cpuinfo);
 
     tbl.node.NumCaches = num_caches as u32;
@@ -547,7 +547,7 @@ pub unsafe fn topology_get_cpu_cache_props(
         }
     }
 
-    HSAKMT_STATUS_SUCCESS
+    _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
 }
 
 /* topology_get_free_io_link_slot_for_node - For the given node_id, find the
@@ -591,10 +591,10 @@ pub fn topology_add_io_link_for_node(
     IoLinkType: HSA_IOLINKTYPE,
     node_to: u32,
     Weight: u32,
-) -> HsakmtStatus {
+) -> _HSAKMT_STATUS {
     let props = topology_get_free_io_link_slot_for_node(node_from, sys_props, node_props);
     if props.is_none() {
-        return HSAKMT_STATUS_NO_MEMORY;
+        return _HSAKMT_STATUS_HSAKMT_STATUS_NO_MEMORY;
     }
 
     let props = props.unwrap();
@@ -606,7 +606,7 @@ pub fn topology_add_io_link_for_node(
 
     node_props[node_from as usize].node.NumIOLinks += 1;
 
-    HSAKMT_STATUS_SUCCESS
+    _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
 }
 
 /* Find the CPU that this GPU (gpu_node) directly connects to */
@@ -622,7 +622,7 @@ pub fn gpu_get_direct_link_cpu(gpu_node: u32, node_props: &mut [node_props_t]) -
 
     for prop in props {
         /* >20 is GPU->CPU->GPU */
-        if prop.IoLinkType == HSA_IOLINKTYPE_PCIEXPRESS && prop.Weight <= 20 {
+        if prop.IoLinkType == _HSA_IOLINKTYPE_HSA_IOLINKTYPE_PCIEXPRESS && prop.Weight <= 20 {
             return prop.NodeTo as i32;
         }
     }
@@ -639,11 +639,11 @@ pub fn get_direct_iolink_info(
     node_props: &[node_props_t],
     weight: &mut u32,
     hsa_type: Option<&mut HSA_IOLINKTYPE>,
-) -> HsakmtStatus {
+) -> _HSAKMT_STATUS {
     let props = &node_props[node1 as usize].link;
 
     if props.is_empty() {
-        return HSAKMT_STATUS_INVALID_NODE_UNIT;
+        return _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_NODE_UNIT;
     }
 
     for prop in props {
@@ -656,11 +656,11 @@ pub fn get_direct_iolink_info(
                 *v = prop.IoLinkType
             }
 
-            return HSAKMT_STATUS_SUCCESS;
+            return _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS;
         }
     }
 
-    HSAKMT_STATUS_INVALID_PARAMETER
+    _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_PARAMETER
 }
 
 pub unsafe fn get_indirect_iolink_info(
@@ -669,7 +669,7 @@ pub unsafe fn get_indirect_iolink_info(
     node_props: &mut [node_props_t],
     weight: &mut u32,
     hsa_type: &mut HSA_IOLINKTYPE,
-) -> HsakmtStatus {
+) -> _HSAKMT_STATUS {
     let mut dir_cpu1 = -1;
     let mut dir_cpu2 = -1;
 
@@ -680,10 +680,10 @@ pub unsafe fn get_indirect_iolink_info(
     let mut i = 0;
 
     *weight = 0;
-    *hsa_type = HSA_IOLINKTYPE_UNDEFINED;
+    *hsa_type = _HSA_IOLINKTYPE_HSA_IOLINKTYPE_UNDEFINED;
 
     if node1 == node2 {
-        return HSAKMT_STATUS_INVALID_PARAMETER;
+        return _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_PARAMETER;
     }
 
     /* CPU->CPU is not an indirect link */
@@ -692,14 +692,14 @@ pub unsafe fn get_indirect_iolink_info(
     if node_props[node1 as usize].node.KFDGpuID == 0
         && node_props[node2 as usize].node.KFDGpuID == 0
     {
-        return HSAKMT_STATUS_INVALID_NODE_UNIT;
+        return _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_NODE_UNIT;
     }
 
     if (node_props[node1 as usize].node.HiveID > 0)
         && (node_props[node2 as usize].node.HiveID > 0)
         && node_props[node1 as usize].node.HiveID == node_props[node2 as usize].node.HiveID
     {
-        return HSAKMT_STATUS_INVALID_PARAMETER;
+        return _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_PARAMETER;
     }
 
     if node_props[node1 as usize].node.KFDGpuID > 0 {
@@ -710,13 +710,13 @@ pub unsafe fn get_indirect_iolink_info(
     }
 
     if dir_cpu1 < 0 && dir_cpu2 < 0 {
-        return HSAKMT_STATUS_ERROR;
+        return _HSAKMT_STATUS_HSAKMT_STATUS_ERROR;
     }
 
     /* if the node2(dst) is GPU , it need to be large bar for host access*/
     if node_props[node2 as usize].node.KFDGpuID > 0 {
         for node_mem in &node_props[node2 as usize].mem {
-            if node_mem.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC {
+            if node_mem.HeapType == _HSA_HEAPTYPE_HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC {
                 break;
             }
 
@@ -724,12 +724,12 @@ pub unsafe fn get_indirect_iolink_info(
         }
 
         if i >= node_props[node2 as usize].node.NumMemoryBanks {
-            return HSAKMT_STATUS_ERROR;
+            return _HSAKMT_STATUS_HSAKMT_STATUS_ERROR;
         }
     }
 
     #[allow(unused_assignments)]
-    let mut ret = HSAKMT_STATUS_SUCCESS;
+    let mut ret = _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS;
 
     /* Possible topology:
      *   GPU --(weight1) -- CPU -- (weight2) -- GPU
@@ -745,7 +745,7 @@ pub unsafe fn get_indirect_iolink_info(
             {
                 ret =
                     get_direct_iolink_info(node1, dir_cpu1 as u32, node_props, &mut weight1, None);
-                if ret != HSAKMT_STATUS_SUCCESS {
+                if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                     return ret;
                 }
 
@@ -761,7 +761,7 @@ pub unsafe fn get_indirect_iolink_info(
             {
                 ret =
                     get_direct_iolink_info(node1, dir_cpu1 as u32, node_props, &mut weight1, None);
-                if ret != HSAKMT_STATUS_SUCCESS {
+                if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                     return ret;
                 }
 
@@ -773,7 +773,7 @@ pub unsafe fn get_indirect_iolink_info(
                     Some(hsa_type),
                 );
 
-                if ret != HSAKMT_STATUS_SUCCESS {
+                if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                     return ret;
                 }
                 /* On QPI interconnection, GPUs can't access
@@ -781,8 +781,8 @@ pub unsafe fn get_indirect_iolink_info(
                  * CPU sockets. CPU<->CPU weight larger than 20
                  * means the two CPUs are in different sockets.
                  */
-                if *hsa_type == HSA_IOLINK_TYPE_QPI_1_1 && weight2 > 20 {
-                    return HSAKMT_STATUS_NOT_SUPPORTED;
+                if *hsa_type == _HSA_IOLINKTYPE_HSA_IOLINK_TYPE_QPI_1_1 && weight2 > 20 {
+                    return _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED;
                 }
                 ret =
                     get_direct_iolink_info(dir_cpu2 as u32, node2, node_props, &mut weight3, None);
@@ -791,7 +791,7 @@ pub unsafe fn get_indirect_iolink_info(
         /* GPU->CPU->CPU */
         {
             ret = get_direct_iolink_info(node1, dir_cpu1 as u32, node_props, &mut weight1, None);
-            if ret != HSAKMT_STATUS_SUCCESS {
+            if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                 return ret;
             }
             ret = get_direct_iolink_info(
@@ -811,14 +811,14 @@ pub unsafe fn get_indirect_iolink_info(
             &mut weight2,
             Some(hsa_type),
         );
-        if ret != HSAKMT_STATUS_SUCCESS {
+        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
             return ret;
         }
 
         ret = get_direct_iolink_info(dir_cpu2 as u32, node2, node_props, &mut weight3, None);
     }
 
-    if ret != HSAKMT_STATUS_SUCCESS {
+    if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
         return ret;
     }
 
@@ -832,7 +832,7 @@ pub unsafe fn topology_create_indirect_gpu_links(
     node_props: &mut [node_props_t],
 ) {
     let mut weight = 0;
-    let mut hsa_type = HSA_IOLINKTYPE_UNDEFINED;
+    let mut hsa_type = _HSA_IOLINKTYPE_HSA_IOLINKTYPE_UNDEFINED;
 
     for i in 0..sys_props.NumNodes {
         for j in 0..sys_props.NumNodes {
@@ -843,7 +843,7 @@ pub unsafe fn topology_create_indirect_gpu_links(
             } else {
                 let ret =
                     topology_add_io_link_for_node(i, sys_props, node_props, hsa_type, j, weight);
-                if ret != HSAKMT_STATUS_SUCCESS {
+                if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                     println!("Fail to add IO link {} -> {}", i, j);
                 }
             }
@@ -855,7 +855,7 @@ pub unsafe fn topology_create_indirect_gpu_links(
             } else {
                 let ret =
                     topology_add_io_link_for_node(j, sys_props, node_props, hsa_type, i, weight);
-                if ret != HSAKMT_STATUS_SUCCESS {
+                if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                     println!("Fail to add IO link {} -> {}", j, i);
                 }
             }
@@ -864,7 +864,7 @@ pub unsafe fn topology_create_indirect_gpu_links(
 }
 
 impl HsakmtGlobals {
-    pub fn hsakmt_validate_nodeid(&self, node_id: u32, gpu_id: &mut u32) -> HsakmtStatus {
+    pub fn hsakmt_validate_nodeid(&self, node_id: u32, gpu_id: &mut u32) -> _HSAKMT_STATUS {
         let node = self
             .topology
             .sys_devices_virtual_kfd
@@ -875,18 +875,18 @@ impl HsakmtGlobals {
 
         *gpu_id = node.gpu_id as u32;
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
-    pub fn hsakmt_gpuid_to_nodeid(&self, gpu_id: u32, node_id: &mut u32) -> HsakmtStatus {
+    pub fn hsakmt_gpuid_to_nodeid(&self, gpu_id: u32, node_id: &mut u32) -> _HSAKMT_STATUS {
         for node_idx in 0..self.topology.g_props.len() {
             if self.topology.g_props[node_idx].node.KFDGpuID == gpu_id {
                 *node_id = node_idx as u32;
-                return HSAKMT_STATUS_SUCCESS;
+                return _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS;
             }
         }
 
-        HSAKMT_STATUS_INVALID_NODE_UNIT
+        _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_NODE_UNIT
     }
 
     pub unsafe fn hsakmt_open_drm_render_device(&mut self, minor: i32) -> i32 {
@@ -968,7 +968,7 @@ impl HsakmtGlobals {
         if ret_value > 0 {
             return true;
         } else if ret_value != -ENOENT && ret_value != -EPERM {
-            // ret = HSAKMT_STATUS_ERROR;
+            // ret = _HSAKMT_STATUS_HSAKMT_STATUS_ERROR;
         }
 
         false
@@ -977,7 +977,7 @@ impl HsakmtGlobals {
     pub unsafe fn hsakmt_topology_sysfs_get_system_props(
         &mut self,
         props: &mut HsaSystemProperties,
-    ) -> HsakmtStatus {
+    ) -> _HSAKMT_STATUS {
         let kfd = &self.topology.sys_devices_virtual_kfd;
 
         props.PlatformOem = kfd.platform_oem as u32;
@@ -1005,7 +1005,7 @@ impl HsakmtGlobals {
         self.topology.map_user_to_sysfs_node_id = ids;
         self.topology.num_sysfs_nodes = num_sysfs_nodes;
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
     pub unsafe fn topology_sysfs_get_node_props(
@@ -1014,7 +1014,7 @@ impl HsakmtGlobals {
         props: &mut HsaNodeProperties,
         p2p_links: &mut bool,
         num_p2pLinks: &mut u32,
-    ) -> HsakmtStatus {
+    ) -> _HSAKMT_STATUS {
         let node = self
             .topology
             .sys_devices_virtual_kfd
@@ -1187,12 +1187,12 @@ impl HsakmtGlobals {
         }
 
         if !self.hsakmt_is_svm_api_supported {
-            props.Capability.ui32.SVMAPISupported = 0;
+            props.Capability.ui32.set_SVMAPISupported(0);
         }
 
         /* Bail out early, if a CPU node */
         if props.NumFComputeCores == 0 {
-            return HSAKMT_STATUS_SUCCESS;
+            return _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS;
         }
 
         if props.NumArrays != 0 {
@@ -1215,7 +1215,7 @@ impl HsakmtGlobals {
         //     //         (major > 63 || minor > 255 || step > 255)) {
         //     //         pr_err("HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
         //     //                envvar);
-        //     //         ret = HSAKMT_STATUS_ERROR;
+        //     //         ret = _HSAKMT_STATUS_HSAKMT_STATUS_ERROR;
         //     //         goto out;
         //     //     }
         //     //     props->OverrideEngineId.ui32.Major = major & 0x3f;
@@ -1278,7 +1278,7 @@ impl HsakmtGlobals {
             props.NumXcc = 1;
         }
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
     pub fn topology_sysfs_get_mem_props(
@@ -1286,7 +1286,7 @@ impl HsakmtGlobals {
         node_id: u32,
         mem_id: u32,
         props: &mut HsaMemoryProperties,
-    ) -> HsakmtStatus {
+    ) -> _HSAKMT_STATUS {
         let node = self
             .topology
             .sys_devices_virtual_kfd
@@ -1300,32 +1300,32 @@ impl HsakmtGlobals {
             KFD_SYSFS_PATH_NODES, node.node_id, mem_id
         );
 
-        let content = fs::read_to_string(mem_banks_path).unwrap();
+        // let content = fs::read_to_string(mem_banks_path).unwrap();
+        // 
+        // let lines = content.split("\n").collect::<Vec<&str>>();
+        // 
+        // for line in lines {
+        //     let pair = line.split(" ").collect::<Vec<&str>>();
+        // 
+        //     if pair.len() != 2 {
+        //         continue;
+        //     }
+        // 
+        //     if pair[0] == "heap_type" {
+        //         let v = pair[1].trim().parse::<usize>().unwrap();
+        //         props.HeapType = v.try_into().unwrap();
+        //     } else if pair[0] == "size_in_bytes" {
+        //         props.__bindgen_anon_1.SizeInBytes = pair[1].trim().parse::<u64>().unwrap();
+        //     } else if pair[0] == "flags" {
+        //         props.Flags.MemoryProperty = pair[1].trim().parse::<u32>().unwrap();
+        //     } else if pair[0] == "width" {
+        //         props.Width = pair[1].trim().parse::<u32>().unwrap();
+        //     } else if pair[0] == "mem_clk_max" {
+        //         props.MemoryClockMax = pair[1].trim().parse::<u32>().unwrap();
+        //     }
+        // }
 
-        let lines = content.split("\n").collect::<Vec<&str>>();
-
-        for line in lines {
-            let pair = line.split(" ").collect::<Vec<&str>>();
-
-            if pair.len() != 2 {
-                continue;
-            }
-
-            if pair[0] == "heap_type" {
-                let v = pair[1].trim().parse::<usize>().unwrap();
-                props.HeapType = v.try_into().unwrap();
-            } else if pair[0] == "size_in_bytes" {
-                props.prop.SizeInBytes = pair[1].trim().parse::<u64>().unwrap();
-            } else if pair[0] == "flags" {
-                props.Flags.MemoryProperty = pair[1].trim().parse::<u32>().unwrap();
-            } else if pair[0] == "width" {
-                props.Width = pair[1].trim().parse::<u32>().unwrap();
-            } else if pair[0] == "mem_clk_max" {
-                props.MemoryClockMax = pair[1].trim().parse::<u32>().unwrap();
-            }
-        }
-
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
     pub fn topology_sysfs_get_cache_props(
@@ -1333,7 +1333,7 @@ impl HsakmtGlobals {
         node_id: u32,
         cache_id: u32,
         props: &mut HsaCacheProperties,
-    ) -> HsakmtStatus {
+    ) -> _HSAKMT_STATUS {
         let node = self
             .topology
             .sys_devices_virtual_kfd
@@ -1382,7 +1382,7 @@ impl HsakmtGlobals {
             }
         }
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
     pub unsafe fn topology_sysfs_get_iolink_props(
@@ -1391,7 +1391,7 @@ impl HsakmtGlobals {
         iolink_id: u32,
         props: &mut HsaIoLinkProperties,
         p2pLink: bool,
-    ) -> HsakmtStatus {
+    ) -> _HSAKMT_STATUS {
         let node = self
             .topology
             .sys_devices_virtual_kfd
@@ -1418,7 +1418,7 @@ impl HsakmtGlobals {
 
         // FIXME topology_sysfs_get_iolink_props
         if content.is_err() {
-            return HSAKMT_STATUS_NOT_SUPPORTED;
+            return _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED;
         }
 
         let content = content.unwrap();
@@ -1443,7 +1443,7 @@ impl HsakmtGlobals {
                 let v = pair[1].trim().parse::<usize>().unwrap();
 
                 if sys_node_id != v {
-                    return HSAKMT_STATUS_INVALID_NODE_UNIT;
+                    return _HSAKMT_STATUS_HSAKMT_STATUS_INVALID_NODE_UNIT;
                 }
 
                 props.NodeFrom = node_id;
@@ -1452,7 +1452,7 @@ impl HsakmtGlobals {
 
                 let is_node_supported = self.topology_sysfs_check_node_supported(v);
                 if !is_node_supported {
-                    return HSAKMT_STATUS_NOT_SUPPORTED;
+                    return _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED;
                 }
 
                 props.NodeTo = node_id;
@@ -1475,14 +1475,19 @@ impl HsakmtGlobals {
             }
         }
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
-    pub unsafe fn topology_take_snapshot(&mut self) -> HsakmtStatus {
+    pub unsafe fn topology_take_snapshot(&mut self) -> _HSAKMT_STATUS {
         let mut gen_start: u32 = 0;
         let mut gen_end: u32 = 0;
 
-        let mut sys_props: HsaSystemProperties = HsaSystemProperties::default();
+        let mut sys_props: HsaSystemProperties = HsaSystemProperties {
+            NumNodes: 0,
+            PlatformOem: 0,
+            PlatformId: 0,
+            PlatformRev: 0,
+        };
         let mut temp_props: Vec<node_props_t> = Vec::new();
 
         let mut p2p_links = false;
@@ -1491,12 +1496,12 @@ impl HsakmtGlobals {
         let (cpu_info, _num_procs) = topology_parse_cpuinfo();
 
         let ret = topology_sysfs_get_generation(&mut gen_start);
-        if ret != HSAKMT_STATUS_SUCCESS {
+        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
             return ret;
         }
 
         let ret = self.hsakmt_topology_sysfs_get_system_props(&mut sys_props);
-        if ret != HSAKMT_STATUS_SUCCESS {
+        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
             return ret;
         }
 
@@ -1511,7 +1516,7 @@ impl HsakmtGlobals {
                     &mut num_p2pLinks,
                 );
 
-                if ret != HSAKMT_STATUS_SUCCESS {
+                if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                     return ret;
                 }
 
@@ -1520,18 +1525,29 @@ impl HsakmtGlobals {
                 // }
 
                 if temp_props[i].node.NumMemoryBanks != 0 {
-                    // for mem_id in 0..temp_props[i].node.NumMemoryBanks {
-                    //     let mut hsa_mem_props = HsaMemoryProperties::default();
-                    //
-                    //     let ret =
-                    //         self.topology_sysfs_get_mem_props(i as u32, mem_id, &mut hsa_mem_props);
-                    //
-                    //     if ret != HSAKMT_STATUS_SUCCESS {
-                    //         return ret;
-                    //     }
-                    //
-                    //     temp_props[i].mem.push(hsa_mem_props);
-                    // }
+                    for mem_id in 0..temp_props[i].node.NumMemoryBanks {
+                        let mut hsa_mem_props = HsaMemoryProperties {
+                            HeapType: 0,
+                            __bindgen_anon_1: _HsaMemoryProperties__bindgen_ty_1 {
+                                SizeInBytes: 0
+                            },
+                            Flags: HSA_MEMORYPROPERTY {
+                                MemoryProperty: 0
+                            },
+                            Width: 0,
+                            MemoryClockMax: 0,
+                            VirtualBaseAddress: 0,
+                        };
+                    
+                        let ret =
+                            self.topology_sysfs_get_mem_props(i as u32, mem_id, &mut hsa_mem_props);
+                    
+                        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+                            return ret;
+                        }
+                    
+                        temp_props[i].mem.push(hsa_mem_props);
+                    }
                 }
 
                 // if temp_props[i].node.NumCaches > 0 {
@@ -1544,7 +1560,7 @@ impl HsakmtGlobals {
                 //             &mut hsa_cache_props,
                 //         );
                 //
-                //         if ret != HSAKMT_STATUS_SUCCESS {
+                //         if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                 //             return ret;
                 //         }
                 //
@@ -1554,7 +1570,7 @@ impl HsakmtGlobals {
                 //     /* a CPU node */
                 //     let ret = topology_get_cpu_cache_props(i as i32, &cpu_info, &mut temp_props[i]);
                 //
-                //     if ret != HSAKMT_STATUS_SUCCESS {
+                //     if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                 //         return ret;
                 //     }
                 // }
@@ -1562,36 +1578,52 @@ impl HsakmtGlobals {
                 let num_ioLinks = temp_props[i].node.NumIOLinks - num_p2pLinks;
                 let mut link_id = 0;
 
-                if num_ioLinks > 0 {
-                    let mut sys_link_id = 0;
-                    /* Parse all the sysfs specified io links. Skip the ones where the
-                     * remote node (node_to) is not accessible
-                     */
-                    while sys_link_id < num_ioLinks && link_id < sys_props.NumNodes - 1 {
-                        let mut temp_link = HsaIoLinkProperties::default();
-
-                        let ret = self.topology_sysfs_get_iolink_props(
-                            i as u32,
-                            sys_link_id,
-                            &mut temp_link,
-                            false,
-                        );
-
-                        if ret == HSAKMT_STATUS_NOT_SUPPORTED {
-                            continue;
-                        } else if ret != HSAKMT_STATUS_SUCCESS {
-                            return ret;
-                        }
-
-                        link_id += 1;
-                        sys_link_id += 1;
-
-                        temp_props[i].link.push(temp_link);
-                    }
-
-                    /* sysfs specifies all the io links. Limit the number to valid ones */
-                    temp_props[i].node.NumIOLinks = link_id;
-                }
+                // if num_ioLinks > 0 {
+                //     let mut sys_link_id = 0;
+                //     /* Parse all the sysfs specified io links. Skip the ones where the
+                //      * remote node (node_to) is not accessible
+                //      */
+                //     while sys_link_id < num_ioLinks && link_id < sys_props.NumNodes - 1 {
+                //         let mut temp_link = HsaIoLinkProperties {
+                //             IoLinkType: 0,
+                //             VersionMajor: 0,
+                //             VersionMinor: 0,
+                //             NodeFrom: 0,
+                //             NodeTo: 0,
+                //             Weight: 0,
+                //             MinimumLatency: 0,
+                //             MaximumLatency: 0,
+                //             MinimumBandwidth: 0,
+                //             MaximumBandwidth: 0,
+                //             RecTransferSize: 0,
+                //             RecSdmaEngIdMask: 0,
+                //             Flags: HSA_LINKPROPERTY {
+                //                 LinkProperty: 0
+                //             },
+                //         };
+                // 
+                //         let ret = self.topology_sysfs_get_iolink_props(
+                //             i as u32,
+                //             sys_link_id,
+                //             &mut temp_link,
+                //             false,
+                //         );
+                // 
+                //         if ret == _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED {
+                //             continue;
+                //         } else if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+                //             return ret;
+                //         }
+                // 
+                //         link_id += 1;
+                //         sys_link_id += 1;
+                // 
+                //         temp_props[i].link.push(temp_link);
+                //     }
+                // 
+                //     /* sysfs specifies all the io links. Limit the number to valid ones */
+                //     temp_props[i].node.NumIOLinks = link_id;
+                // }
 
                 // if num_p2pLinks > 0 {
                 //     let mut sys_link_id = 0;
@@ -1609,7 +1641,7 @@ impl HsakmtGlobals {
                 //         );
                 //         if ret == HSAKMT_STATUS_NOT_SUPPORTED {
                 //             continue;
-                //         } else if ret != HSAKMT_STATUS_SUCCESS {
+                //         } else if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                 //             return ret;
                 //         }
                 //
@@ -1632,7 +1664,7 @@ impl HsakmtGlobals {
         }
 
         let ret = topology_sysfs_get_generation(&mut gen_end);
-        if ret != HSAKMT_STATUS_SUCCESS {
+        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
             return ret;
         }
 
@@ -1643,7 +1675,7 @@ impl HsakmtGlobals {
         self.topology.g_system = sys_props;
         self.topology.g_props = temp_props;
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
     pub fn topology_drop_snapshot(&self) {
@@ -1653,39 +1685,47 @@ impl HsakmtGlobals {
     pub unsafe fn hsaKmtAcquireSystemProperties(
         &mut self,
         system_properties: &mut HsaSystemProperties,
-    ) -> HsakmtStatus {
+    ) -> _HSAKMT_STATUS {
         self.check_kfd_open_and_panic();
 
-        if self.topology.g_system != HsaSystemProperties::default() {
+        let d = HsaSystemProperties {
+            NumNodes: 0,
+            PlatformOem: 0,
+            PlatformId: 0,
+            PlatformRev: 0,
+        };
+
+        if self.topology.g_system != d {
             system_properties.NumNodes = self.topology.g_system.NumNodes;
             system_properties.PlatformOem = self.topology.g_system.PlatformOem;
             system_properties.PlatformId = self.topology.g_system.PlatformId;
             system_properties.PlatformRev = self.topology.g_system.PlatformRev;
 
-            return HSAKMT_STATUS_SUCCESS;
+            return _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS;
         }
 
         let ret = self.topology_take_snapshot();
-        if ret != HSAKMT_STATUS_SUCCESS {
+        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
             return ret;
         }
 
         // let err = self.hsakmt_fmm_init_process_apertures(self.topology.g_system.NumNodes);
-        // if err != HSAKMT_STATUS_SUCCESS {
+        // if err != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
         //     println!("hsakmt_fmm_init_process_apertures error");
         //     self.topology_drop_snapshot();
         //     return err;
         // }
 
-        // let err = self.hsakmt_init_process_doorbells(self.topology.g_system.NumNodes);
-        // if err != HSAKMT_STATUS_SUCCESS {
-        //     println!("hsakmt_fmm_init_process_apertures error");
-        //     return err;
-        // }
+        let err = self.hsakmt_init_process_doorbells(self.topology.g_system.NumNodes);
+        if err != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+            // println!("hsakmt_fmm_init_process_apertures error");
+            return err;
+            // panic!("hsakmt_fmm_init_process_apertures error");
+        }
 
         *system_properties = self.topology.g_system;
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
     pub fn hsakmt_topology_get_node_props(&mut self, NodeId: u32) -> &mut HsaNodeProperties {

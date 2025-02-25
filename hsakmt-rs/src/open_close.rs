@@ -2,11 +2,10 @@
 
 use crate::debug::debug_topology_println;
 use crate::globals::HsakmtGlobals;
-use crate::hsakmttypes::HsakmtStatus::{
-    HSAKMT_STATUS_KERNEL_ALREADY_OPENED, HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED,
-    HSAKMT_STATUS_SUCCESS,
+use crate::hsakmttypes::{
+    HsaSystemProperties, _HSAKMT_STATUS, _HSAKMT_STATUS_HSAKMT_STATUS_KERNEL_ALREADY_OPENED,
+    _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS,
 };
-use crate::hsakmttypes::{HsaSystemProperties, HsakmtStatus};
 use libc::{
     close, dlerror, dlsym, getenv, open, strcmp, sysconf, O_CLOEXEC, O_RDWR, RTLD_DEFAULT,
     _SC_PAGESIZE,
@@ -27,9 +26,14 @@ impl HsakmtGlobals {
         self.hsakmt_page_shift = (ffs(hsakmt_page_size) - 1) as i32;
     }
 
-    pub unsafe fn hsaKmtOpenKFD(&mut self) -> HsakmtStatus {
+    pub unsafe fn hsaKmtOpenKFD(&mut self) -> _HSAKMT_STATUS {
         let mut fd = -1;
-        let mut sys_props = HsaSystemProperties::default();
+        let mut sys_props = HsaSystemProperties {
+            NumNodes: 0,
+            PlatformOem: 0,
+            PlatformId: 0,
+            PlatformRev: 0,
+        };
 
         if self.hsakmt_kfd_open_count == 0 {
             let symbol_name = CString::new("amdgpu_device_get_fd").unwrap();
@@ -54,7 +58,7 @@ impl HsakmtGlobals {
 
                 if fd == -1 {
                     close(fd);
-                    return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
+                    return _HSAKMT_STATUS_HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
                 }
 
                 self.hsakmt_kfd_fd = fd;
@@ -63,7 +67,7 @@ impl HsakmtGlobals {
             self.init_page_size();
 
             let ret = self.hsakmt_init_kfd_version();
-            if ret != HSAKMT_STATUS_SUCCESS {
+            if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                 close(fd);
             }
 
@@ -78,7 +82,7 @@ impl HsakmtGlobals {
             self.hsakmt_is_svm_api_supported = hsakmt_is_svm_api_supported;
 
             let ret = self.hsakmt_topology_sysfs_get_system_props(&mut sys_props);
-            if ret != HSAKMT_STATUS_SUCCESS {
+            if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
                 close(fd);
             }
 
@@ -89,14 +93,14 @@ impl HsakmtGlobals {
             // hsakmt_init_counter_props
         } else {
             self.hsakmt_kfd_open_count += 1;
-            return HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
+            return _HSAKMT_STATUS_HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
         }
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 
-    pub unsafe fn hsaKmtCloseKFD(&self) -> HsakmtStatus {
+    pub unsafe fn hsaKmtCloseKFD(&self) -> _HSAKMT_STATUS {
         // ...
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 }

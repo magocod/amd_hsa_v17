@@ -7,7 +7,7 @@
     clippy::mixed_case_hex_literals
 )]
 
-use crate::hsakmttypes::{HsaMemFlagUnion, HsaMemFlags, HSA_ENGINE_ID};
+use crate::hsakmttypes::{HsaMemFlags, _HsaMemFlags__bindgen_ty_1, HSA_ENGINE_ID};
 use crate::rbtree::{rbtree_node_t, rbtree_t};
 use amdgpu_drm_sys::bindings::amdgpu_device;
 
@@ -319,7 +319,7 @@ impl Default for vm_object {
             node: Default::default(),
             user_node: Default::default(),
             mflags: HsaMemFlags {
-                st: HsaMemFlagUnion { Value: 0 },
+                __bindgen_anon_1: _HsaMemFlags__bindgen_ty_1 { Value: 0 },
             },
             registered_device_id_array: std::ptr::null_mut(),
             registered_device_id_array_size: 0,

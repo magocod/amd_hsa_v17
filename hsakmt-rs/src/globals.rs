@@ -10,8 +10,9 @@
 use crate::fmm_types::{
     gpu_mem_t, manageable_aperture_t, svm_t, DRM_FIRST_RENDER_NODE, DRM_LAST_RENDER_NODE,
 };
-use crate::hsakmttypes::{node_props_t, HsaSystemProperties, HsaVersionInfo};
+use crate::hsakmttypes::{HsaSystemProperties, HsaVersionInfo};
 use crate::queues::process_doorbells;
+use crate::topology_types::node_props_t;
 use crate::topology_utils::SysDevicesVirtualKfd;
 use amdgpu_drm_sys::bindings::amdgpu_device;
 
@@ -20,7 +21,6 @@ use amdgpu_drm_sys::bindings::amdgpu_device;
 pub const START_NON_CANONICAL_ADDR: u64 = 1 << 47;
 pub const END_NON_CANONICAL_ADDR: u64 = !0 - (1 << 47);
 
-#[derive(Debug)]
 pub struct TopologyGlobals {
     pub g_system: HsaSystemProperties,
     pub g_props: Vec<node_props_t>,
@@ -39,7 +39,12 @@ impl TopologyGlobals {
         sys_devices_virtual_kfd.load_nodes();
 
         Self {
-            g_system: Default::default(),
+            g_system: HsaSystemProperties {
+                NumNodes: 0,
+                PlatformOem: 0,
+                PlatformId: 0,
+                PlatformRev: 0,
+            },
             g_props: vec![],
             map_user_to_sysfs_node_id: vec![],
             num_sysfs_nodes: 0,

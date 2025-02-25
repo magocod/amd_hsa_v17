@@ -522,6 +522,10 @@ pub unsafe fn print_tree(tree: &rbtree_s) {
 
     let root = &(*tree.root);
     println!("tree.root: {:#?}", root);
+    
+    if root.color == 43 { 
+        panic!("error {:?}", root);
+    }
 
     // let root_left = &(*root.left);
     // println!("tree.root.left: {:#?}", root_left);

@@ -1,5 +1,3 @@
-use hsakmt_rs::fmm_types::TEST_MAP_MEMORY_TO_GPU_VECTOR_INDEX;
-use hsakmt_rs::hsakmttypes::HsakmtStatus::HSAKMT_STATUS_SUCCESS;
 use hsakmt_rs::rbtree::print_tree;
 use hsakmt_rs::test_kfd_utils::kfd_base_component::KFDBaseComponentTest;
 

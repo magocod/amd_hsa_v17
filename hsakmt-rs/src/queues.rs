@@ -4,11 +4,7 @@
 #![allow(unused_assignments)]
 
 use crate::globals::HsakmtGlobals;
-use crate::hsakmttypes::HsakmtStatus::HSAKMT_STATUS_SUCCESS;
-use crate::hsakmttypes::{
-    HsakmtStatus, GFX_VERSION_ALDEBARAN, GFX_VERSION_AQUA_VANJARAM, GFX_VERSION_ARCTURUS,
-    GFX_VERSION_GFX1200, GFX_VERSION_GFX1201, GFX_VERSION_PLUM_BONITO, GFX_VERSION_WHEAT_NAS,
-};
+use crate::hsakmttypes::{_HSAKMT_STATUS, _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS};
 
 #[derive(Debug)]
 pub struct queue {
@@ -40,6 +36,41 @@ pub struct process_doorbells {
     mapping: *mut std::os::raw::c_void,
 }
 
+/* Calculate VGPR and SGPR register file size per CU */
+pub const SGPR_SIZE_PER_CU: usize = 0x4000;
+
+pub const GFX_VERSION_KAVERI: usize = 0x070000;
+pub const GFX_VERSION_HAWAII: usize = 0x070001;
+pub const GFX_VERSION_CARRIZO: usize = 0x080001;
+pub const GFX_VERSION_TONGA: usize = 0x080002;
+pub const GFX_VERSION_FIJI: usize = 0x080003;
+pub const GFX_VERSION_POLARIS10: usize = 0x080003;
+pub const GFX_VERSION_POLARIS11: usize = 0x080003;
+pub const GFX_VERSION_POLARIS12: usize = 0x080003;
+pub const GFX_VERSION_VEGAM: usize = 0x080003;
+pub const GFX_VERSION_VEGA10: usize = 0x090000;
+pub const GFX_VERSION_RAVEN: usize = 0x090002;
+pub const GFX_VERSION_VEGA12: usize = 0x090004;
+pub const GFX_VERSION_VEGA20: usize = 0x090006;
+pub const GFX_VERSION_ARCTURUS: usize = 0x090008;
+pub const GFX_VERSION_ALDEBARAN: usize = 0x09000A;
+pub const GFX_VERSION_AQUA_VANJARAM: usize = 0x090400;
+pub const GFX_VERSION_RENOIR: usize = 0x09000C;
+pub const GFX_VERSION_NAVI10: usize = 0x0A0100;
+pub const GFX_VERSION_NAVI12: usize = 0x0A0101;
+pub const GFX_VERSION_NAVI14: usize = 0x0A0102;
+pub const GFX_VERSION_CYAN_SKILLFISH: usize = 0x0A0103;
+pub const GFX_VERSION_SIENNA_CICHLID: usize = 0x0A0300;
+pub const GFX_VERSION_NAVY_FLOUNDER: usize = 0x0A0301;
+pub const GFX_VERSION_DIMGREY_CAVEFISH: usize = 0x0A0302;
+pub const GFX_VERSION_VANGOGH: usize = 0x0A0303;
+pub const GFX_VERSION_BEIGE_GOBY: usize = 0x0A0304;
+pub const GFX_VERSION_YELLOW_CARP: usize = 0x0A0305;
+pub const GFX_VERSION_PLUM_BONITO: usize = 0x0B0000;
+pub const GFX_VERSION_WHEAT_NAS: usize = 0x0B0001;
+pub const GFX_VERSION_GFX1200: usize = 0x0C0000;
+pub const GFX_VERSION_GFX1201: usize = 0x0C0001;
+
 pub fn hsakmt_get_vgpr_size_per_cu(gfxv: u32) -> u32 {
     let mut vgpr_size = 0x40000;
 
@@ -60,7 +91,7 @@ pub fn hsakmt_get_vgpr_size_per_cu(gfxv: u32) -> u32 {
 }
 
 impl HsakmtGlobals {
-    pub fn hsakmt_init_process_doorbells(&mut self, NumNodes: u32) -> HsakmtStatus {
+    pub fn hsakmt_init_process_doorbells(&mut self, NumNodes: u32) -> _HSAKMT_STATUS {
         /* doorbells[] is accessed using Topology NodeId. This means doorbells[0],
          * which corresponds to CPU only Node, might not be used
          */
@@ -76,6 +107,6 @@ impl HsakmtGlobals {
 
         self.queue.num_doorbells = NumNodes;
 
-        HSAKMT_STATUS_SUCCESS
+        _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
 }

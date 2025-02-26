@@ -310,19 +310,7 @@ pub unsafe fn get_cpu_cache_info(
     let num_idx = cpu_ci.num_caches;
 
     for idx in 0..num_idx {
-        let mut this_cache = HsaCacheProperties {
-            ProcessorIdLow: 0,
-            CacheLevel: 0,
-            CacheSize: 0,
-            CacheLineSize: 0,
-            CacheLinesPerTag: 0,
-            CacheAssociativity: 0,
-            CacheLatency: 0,
-            CacheType: HsaCacheType {
-                Value: 0
-            },
-            SiblingMap: [0; 256usize],
-        };
+        let mut this_cache = HsaCacheProperties::new();
 
         /* If this cache is shared by multiple CPUs, we only need
          * to list it in the first CPU.
@@ -1009,9 +997,9 @@ impl HsakmtGlobals {
     }
 
     pub unsafe fn topology_sysfs_get_node_props(
-        &self,
+        &mut self,
         node_id: u32,
-        props: &mut HsaNodeProperties,
+        props_index: usize,
         p2p_links: &mut bool,
         num_p2pLinks: &mut u32,
     ) -> _HSAKMT_STATUS {
@@ -1025,6 +1013,8 @@ impl HsakmtGlobals {
 
         let mut simd_arrays_count = 0;
         let mut gfxv = 0;
+
+        let props = &mut self.topology.g_props[props_index].node;
 
         /* Retrieve the GPU ID */
         props.KFDGpuID = node.gpu_id as u32;
@@ -1300,30 +1290,30 @@ impl HsakmtGlobals {
             KFD_SYSFS_PATH_NODES, node.node_id, mem_id
         );
 
-        // let content = fs::read_to_string(mem_banks_path).unwrap();
-        // 
-        // let lines = content.split("\n").collect::<Vec<&str>>();
-        // 
-        // for line in lines {
-        //     let pair = line.split(" ").collect::<Vec<&str>>();
-        // 
-        //     if pair.len() != 2 {
-        //         continue;
-        //     }
-        // 
-        //     if pair[0] == "heap_type" {
-        //         let v = pair[1].trim().parse::<usize>().unwrap();
-        //         props.HeapType = v.try_into().unwrap();
-        //     } else if pair[0] == "size_in_bytes" {
-        //         props.__bindgen_anon_1.SizeInBytes = pair[1].trim().parse::<u64>().unwrap();
-        //     } else if pair[0] == "flags" {
-        //         props.Flags.MemoryProperty = pair[1].trim().parse::<u32>().unwrap();
-        //     } else if pair[0] == "width" {
-        //         props.Width = pair[1].trim().parse::<u32>().unwrap();
-        //     } else if pair[0] == "mem_clk_max" {
-        //         props.MemoryClockMax = pair[1].trim().parse::<u32>().unwrap();
-        //     }
-        // }
+        let content = fs::read_to_string(mem_banks_path).unwrap();
+
+        let lines = content.split("\n").collect::<Vec<&str>>();
+
+        for line in lines {
+            let pair = line.split(" ").collect::<Vec<&str>>();
+
+            if pair.len() != 2 {
+                continue;
+            }
+
+            if pair[0] == "heap_type" {
+                let v = pair[1].trim().parse::<usize>().unwrap();
+                props.HeapType = v.try_into().unwrap();
+            } else if pair[0] == "size_in_bytes" {
+                props.__bindgen_anon_1.SizeInBytes = pair[1].trim().parse::<u64>().unwrap();
+            } else if pair[0] == "flags" {
+                props.Flags.MemoryProperty = pair[1].trim().parse::<u32>().unwrap();
+            } else if pair[0] == "width" {
+                props.Width = pair[1].trim().parse::<u32>().unwrap();
+            } else if pair[0] == "mem_clk_max" {
+                props.MemoryClockMax = pair[1].trim().parse::<u32>().unwrap();
+            }
+        }
 
         _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }
@@ -1488,7 +1478,8 @@ impl HsakmtGlobals {
             PlatformId: 0,
             PlatformRev: 0,
         };
-        let mut temp_props: Vec<node_props_t> = Vec::new();
+
+        // let mut temp_props: Vec<node_props_t> = Vec::new();
 
         let mut p2p_links = false;
         let mut num_p2pLinks: u32 = 0;
@@ -1505,13 +1496,17 @@ impl HsakmtGlobals {
             return ret;
         }
 
+        for _ in 0..sys_props.NumNodes as usize {
+            self.topology.g_props.push(node_props_t::new());
+        }
+
         if sys_props.NumNodes > 0 {
             for i in 0..sys_props.NumNodes as usize {
-                temp_props.push(node_props_t::new());
+            //     temp_props.push(node_props_t::new());
 
                 let ret = self.topology_sysfs_get_node_props(
                     i as u32,
-                    &mut temp_props[i].node,
+                    i,
                     &mut p2p_links,
                     &mut num_p2pLinks,
                 );
@@ -1524,144 +1519,134 @@ impl HsakmtGlobals {
                 //     topology_get_cpu_model_name(&temp_props[i].node, cpuinfo, num_procs);
                 // }
 
-                if temp_props[i].node.NumMemoryBanks != 0 {
-                    for mem_id in 0..temp_props[i].node.NumMemoryBanks {
-                        let mut hsa_mem_props = HsaMemoryProperties {
-                            HeapType: 0,
-                            __bindgen_anon_1: _HsaMemoryProperties__bindgen_ty_1 {
-                                SizeInBytes: 0
-                            },
-                            Flags: HSA_MEMORYPROPERTY {
-                                MemoryProperty: 0
-                            },
-                            Width: 0,
-                            MemoryClockMax: 0,
-                            VirtualBaseAddress: 0,
-                        };
-                    
-                        let ret =
-                            self.topology_sysfs_get_mem_props(i as u32, mem_id, &mut hsa_mem_props);
-                    
-                        if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
-                            return ret;
-                        }
-                    
-                        temp_props[i].mem.push(hsa_mem_props);
+                if self.topology.g_props[i].node.NumMemoryBanks != 0 {
+                    for mem_id in 0..self.topology.g_props[i].node.NumMemoryBanks {
+                        let mut hsa_mem_props = HsaMemoryProperties::new();
+                        self.topology.g_props[i].mem.push(hsa_mem_props);
+                
+                        // let ret =
+                        //     self.topology_sysfs_get_mem_props(i as u32, mem_id, &mut hsa_mem_props);
+                        //
+                        // if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+                        //     return ret;
+                        // }
+                
+                        // self.topology.g_props[i].mem.push(hsa_mem_props);
                     }
                 }
 
-                // if temp_props[i].node.NumCaches > 0 {
-                //     for cache_id in 0..temp_props[i].node.NumCaches {
-                //         let mut hsa_cache_props = HsaCacheProperties::default();
-                //
-                //         let ret = self.topology_sysfs_get_cache_props(
-                //             i as u32,
-                //             cache_id,
-                //             &mut hsa_cache_props,
-                //         );
-                //
-                //         if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
-                //             return ret;
-                //         }
-                //
-                //         temp_props[i].cache.push(hsa_cache_props);
-                //     }
-                // } else if temp_props[i].node.KFDGpuID == 0 {
-                //     /* a CPU node */
-                //     let ret = topology_get_cpu_cache_props(i as i32, &cpu_info, &mut temp_props[i]);
-                //
-                //     if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
-                //         return ret;
-                //     }
-                // }
-
-                let num_ioLinks = temp_props[i].node.NumIOLinks - num_p2pLinks;
-                let mut link_id = 0;
-
-                // if num_ioLinks > 0 {
-                //     let mut sys_link_id = 0;
-                //     /* Parse all the sysfs specified io links. Skip the ones where the
-                //      * remote node (node_to) is not accessible
-                //      */
-                //     while sys_link_id < num_ioLinks && link_id < sys_props.NumNodes - 1 {
-                //         let mut temp_link = HsaIoLinkProperties {
-                //             IoLinkType: 0,
-                //             VersionMajor: 0,
-                //             VersionMinor: 0,
-                //             NodeFrom: 0,
-                //             NodeTo: 0,
-                //             Weight: 0,
-                //             MinimumLatency: 0,
-                //             MaximumLatency: 0,
-                //             MinimumBandwidth: 0,
-                //             MaximumBandwidth: 0,
-                //             RecTransferSize: 0,
-                //             RecSdmaEngIdMask: 0,
-                //             Flags: HSA_LINKPROPERTY {
-                //                 LinkProperty: 0
-                //             },
-                //         };
-                // 
-                //         let ret = self.topology_sysfs_get_iolink_props(
-                //             i as u32,
-                //             sys_link_id,
-                //             &mut temp_link,
-                //             false,
-                //         );
-                // 
-                //         if ret == _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED {
-                //             continue;
-                //         } else if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
-                //             return ret;
-                //         }
-                // 
-                //         link_id += 1;
-                //         sys_link_id += 1;
-                // 
-                //         temp_props[i].link.push(temp_link);
-                //     }
-                // 
-                //     /* sysfs specifies all the io links. Limit the number to valid ones */
-                //     temp_props[i].node.NumIOLinks = link_id;
-                // }
-
-                // if num_p2pLinks > 0 {
-                //     let mut sys_link_id = 0;
-                //
-                //     /* Parse all the sysfs specified p2p links.
-                //      */
-                //     while sys_link_id < num_p2pLinks && link_id < sys_props.NumNodes - 1 {
-                //         let mut temp_link = HsaIoLinkProperties::default();
-                //
-                //         let ret = self.topology_sysfs_get_iolink_props(
-                //             i as u32,
-                //             sys_link_id,
-                //             &mut temp_link,
-                //             true,
-                //         );
-                //         if ret == HSAKMT_STATUS_NOT_SUPPORTED {
-                //             continue;
-                //         } else if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
-                //             return ret;
-                //         }
-                //
-                //         link_id += 1;
-                //         sys_link_id += 1;
-                //
-                //         temp_props[i].link.push(temp_link);
-                //     }
-                //
-                //     temp_props[i].node.NumIOLinks = link_id;
-                // }
+            //     // if temp_props[i].node.NumCaches > 0 {
+            //     //     for cache_id in 0..temp_props[i].node.NumCaches {
+            //     //         let mut hsa_cache_props = HsaCacheProperties::default();
+            //     //
+            //     //         let ret = self.topology_sysfs_get_cache_props(
+            //     //             i as u32,
+            //     //             cache_id,
+            //     //             &mut hsa_cache_props,
+            //     //         );
+            //     //
+            //     //         if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+            //     //             return ret;
+            //     //         }
+            //     //
+            //     //         temp_props[i].cache.push(hsa_cache_props);
+            //     //     }
+            //     // } else if temp_props[i].node.KFDGpuID == 0 {
+            //     //     /* a CPU node */
+            //     //     let ret = topology_get_cpu_cache_props(i as i32, &cpu_info, &mut temp_props[i]);
+            //     //
+            //     //     if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+            //     //         return ret;
+            //     //     }
+            //     // }
+            //
+            //     let num_ioLinks = temp_props[i].node.NumIOLinks - num_p2pLinks;
+            //     let mut link_id = 0;
+            //
+            //     // if num_ioLinks > 0 {
+            //     //     let mut sys_link_id = 0;
+            //     //     /* Parse all the sysfs specified io links. Skip the ones where the
+            //     //      * remote node (node_to) is not accessible
+            //     //      */
+            //     //     while sys_link_id < num_ioLinks && link_id < sys_props.NumNodes - 1 {
+            //     //         let mut temp_link = HsaIoLinkProperties {
+            //     //             IoLinkType: 0,
+            //     //             VersionMajor: 0,
+            //     //             VersionMinor: 0,
+            //     //             NodeFrom: 0,
+            //     //             NodeTo: 0,
+            //     //             Weight: 0,
+            //     //             MinimumLatency: 0,
+            //     //             MaximumLatency: 0,
+            //     //             MinimumBandwidth: 0,
+            //     //             MaximumBandwidth: 0,
+            //     //             RecTransferSize: 0,
+            //     //             RecSdmaEngIdMask: 0,
+            //     //             Flags: HSA_LINKPROPERTY {
+            //     //                 LinkProperty: 0
+            //     //             },
+            //     //         };
+            //     //
+            //     //         let ret = self.topology_sysfs_get_iolink_props(
+            //     //             i as u32,
+            //     //             sys_link_id,
+            //     //             &mut temp_link,
+            //     //             false,
+            //     //         );
+            //     //
+            //     //         if ret == _HSAKMT_STATUS_HSAKMT_STATUS_NOT_SUPPORTED {
+            //     //             continue;
+            //     //         } else if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+            //     //             return ret;
+            //     //         }
+            //     //
+            //     //         link_id += 1;
+            //     //         sys_link_id += 1;
+            //     //
+            //     //         temp_props[i].link.push(temp_link);
+            //     //     }
+            //     //
+            //     //     /* sysfs specifies all the io links. Limit the number to valid ones */
+            //     //     temp_props[i].node.NumIOLinks = link_id;
+            //     // }
+            //
+            //     // if num_p2pLinks > 0 {
+            //     //     let mut sys_link_id = 0;
+            //     //
+            //     //     /* Parse all the sysfs specified p2p links.
+            //     //      */
+            //     //     while sys_link_id < num_p2pLinks && link_id < sys_props.NumNodes - 1 {
+            //     //         let mut temp_link = HsaIoLinkProperties::default();
+            //     //
+            //     //         let ret = self.topology_sysfs_get_iolink_props(
+            //     //             i as u32,
+            //     //             sys_link_id,
+            //     //             &mut temp_link,
+            //     //             true,
+            //     //         );
+            //     //         if ret == HSAKMT_STATUS_NOT_SUPPORTED {
+            //     //             continue;
+            //     //         } else if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
+            //     //             return ret;
+            //     //         }
+            //     //
+            //     //         link_id += 1;
+            //     //         sys_link_id += 1;
+            //     //
+            //     //         temp_props[i].link.push(temp_link);
+            //     //     }
+            //     //
+            //     //     temp_props[i].node.NumIOLinks = link_id;
+            //     // }
             }
         }
 
-        if !p2p_links {
-            /* All direct IO links are created in the kernel. Here we need to
-             * connect GPU<->GPU or GPU<->CPU indirect IO links.
-             */
-            topology_create_indirect_gpu_links(&sys_props, &mut temp_props);
-        }
+        // if !p2p_links {
+        //     /* All direct IO links are created in the kernel. Here we need to
+        //      * connect GPU<->GPU or GPU<->CPU indirect IO links.
+        //      */
+        //     topology_create_indirect_gpu_links(&sys_props, &mut temp_props);
+        // }
 
         let ret = topology_sysfs_get_generation(&mut gen_end);
         if ret != _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS {
@@ -1673,7 +1658,7 @@ impl HsakmtGlobals {
         }
 
         self.topology.g_system = sys_props;
-        self.topology.g_props = temp_props;
+        // self.topology.g_props = temp_props;
 
         _HSAKMT_STATUS_HSAKMT_STATUS_SUCCESS
     }

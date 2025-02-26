@@ -1,3 +1,4 @@
+// use std::thread;
 use hsakmt_rs::rbtree::print_tree;
 use hsakmt_rs::test_kfd_utils::kfd_base_component::KFDBaseComponentTest;
 
@@ -21,6 +22,8 @@ fn test_base_component() {
         "kfd_base.hsakmt.queue.doorbells.len = {:?}",
         kfd_base.hsakmt.queue.doorbells.len()
     );
+    
+    println!("global size = {}", std::mem::size_of_val(&kfd_base));
 
     for aperture in kfd_base.hsakmt.fmm.svm.apertures.iter() {
         println!("---");

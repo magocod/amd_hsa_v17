@@ -15,3 +15,4 @@ pub mod queues;
 pub mod test_kfd_utils;
 pub mod topology;
 pub mod topology_types;
+pub mod rb_tree_v2;

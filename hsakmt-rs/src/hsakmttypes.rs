@@ -1359,6 +1359,24 @@ pub struct _HsaMemoryProperties {
     pub MemoryClockMax: HSAuint32,
     pub VirtualBaseAddress: HSAuint64,
 }
+
+impl _HsaMemoryProperties {
+    pub fn new() -> Self {
+        Self {
+            HeapType: 0,
+            __bindgen_anon_1: _HsaMemoryProperties__bindgen_ty_1 {
+                SizeInBytes: 0
+            },
+            Flags: HSA_MEMORYPROPERTY {
+                MemoryProperty: 0
+            },
+            Width: 0,
+            MemoryClockMax: 0,
+            VirtualBaseAddress: 0,
+        }
+    }
+}
+
 #[repr(C, packed(4))]
 #[derive(Copy, Clone)]
 pub union _HsaMemoryProperties__bindgen_ty_1 {
@@ -1565,6 +1583,25 @@ const _: () = {
     ["Offset of field: _HaCacheProperties::SiblingMap"]
         [::std::mem::offset_of!(_HaCacheProperties, SiblingMap) - 32usize];
 };
+
+impl _HaCacheProperties {
+    pub fn new() -> Self {
+        Self {
+            ProcessorIdLow: 0,
+            CacheLevel: 0,
+            CacheSize: 0,
+            CacheLineSize: 0,
+            CacheLinesPerTag: 0,
+            CacheAssociativity: 0,
+            CacheLatency: 0,
+            CacheType: HsaCacheType {
+                Value: 0
+            },
+            SiblingMap: [0; 256usize],
+        }
+    }
+}
+
 pub type HsaCacheProperties = _HaCacheProperties;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

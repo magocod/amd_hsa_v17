@@ -44,7 +44,7 @@ impl rbtree_s {
     pub unsafe fn init() -> Self {
         let mut t = Self {
             root: std::ptr::null_mut(),
-            sentinel: Default::default(),
+            sentinel: rbtree_node_t::default(),
         };
 
         rbtree_init(&mut t);

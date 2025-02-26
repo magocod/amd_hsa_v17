@@ -8,3 +8,4 @@ libc = "0.2"
 amdgpu-drm-sys = { path = "../amdgpu-drm-sys" }
 xf86drm-sys = { path = "../xf86drm-sys" }
 numa-sys = { path = "../numa-sys" }
+rand = "0.9.0"
